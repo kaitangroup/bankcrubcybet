@@ -1,0 +1,126 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* BankruptcyBet Brand — Navy / Gold / Cream */
+    --background: 42 30% 96%;
+    --foreground: 220 45% 14%;
+    --card: 42 25% 98%;
+    --card-foreground: 220 45% 14%;
+    --popover: 42 25% 98%;
+    --popover-foreground: 220 45% 14%;
+    --primary: 38 68% 44%;        /* Gold #B8942A */
+    --primary-foreground: 0 0% 100%;
+    --secondary: 220 45% 20%;     /* Navy #1B2A4A */
+    --secondary-foreground: 0 0% 100%;
+    --muted: 42 15% 90%;
+    --muted-foreground: 220 15% 45%;
+    --accent: 42 15% 90%;
+    --accent-foreground: 220 45% 14%;
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 42 12% 83%;
+    --input: 42 12% 83%;
+    --ring: 38 68% 44%;
+    --radius: 0.5rem;
+
+    /* Font variables */
+    --font-sans: 'DM Sans', system-ui, sans-serif;
+    --font-serif: 'Playfair Display', Georgia, serif;
+    --font-mono: 'JetBrains Mono', 'Fira Code', ui-monospace, monospace;
+
+    /* Custom tokens */
+    --navy: 220 45% 20%;
+    --gold: 38 68% 44%;
+    --cream: 42 30% 96%;
+    --bullish: 142 72% 29%;
+    --bearish: 0 72% 45%;
+    --mixed: 38 68% 44%;
+  }
+
+  .dark {
+    --background: 220 35% 9%;
+    --foreground: 42 15% 88%;
+    --card: 220 30% 12%;
+    --card-foreground: 42 15% 88%;
+    --popover: 220 30% 12%;
+    --popover-foreground: 42 15% 88%;
+    --primary: 38 60% 52%;
+    --primary-foreground: 220 45% 10%;
+    --secondary: 220 30% 20%;
+    --secondary-foreground: 42 15% 88%;
+    --muted: 220 25% 16%;
+    --muted-foreground: 42 10% 55%;
+    --accent: 220 25% 16%;
+    --accent-foreground: 42 15% 88%;
+    --destructive: 0 62% 55%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 220 20% 22%;
+    --input: 220 20% 22%;
+    --ring: 38 60% 52%;
+
+    --navy: 220 35% 9%;
+    --gold: 38 60% 52%;
+    --cream: 42 15% 88%;
+    --bullish: 142 60% 40%;
+    --bearish: 0 62% 55%;
+    --mixed: 38 60% 52%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+    box-sizing: border-box;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+  h1, h2, h3 {
+    font-family: 'Playfair Display', Georgia, serif;
+    line-height: 1.2;
+  }
+}
+
+/* Ticker animation */
+@keyframes ticker-scroll {
+  0%   { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+.ticker-inner {
+  animation: ticker-scroll 40s linear infinite;
+  white-space: nowrap;
+  display: flex;
+  gap: 0;
+}
+.ticker-inner:hover { animation-play-state: paused; }
+
+/* Pulse badge */
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.4; }
+}
+.pulse-dot { animation: pulse-dot 1.5s ease-in-out infinite; }
+
+/* Sparkline */
+.sparkline { display: inline-block; vertical-align: middle; }
+
+/* Card hover */
+.market-card {
+  transition: transform 0.18s ease, box-shadow 0.18s ease;
+  cursor: pointer;
+}
+.market-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px hsl(var(--navy) / 0.15);
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: hsl(var(--muted)); }
+::-webkit-scrollbar-thumb { background: hsl(var(--border)); border-radius: 3px; }
