@@ -1,8 +1,8 @@
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import Database from "better-sqlite3";
 import { eq, desc } from "drizzle-orm";
-import { users, markets, news, trades, signups } from "@shared/schema";
-import type { User, InsertUser, Market, InsertMarket, News, InsertNews, Trade, InsertTrade, Signup, InsertSignup } from "@shared/schema";
+import { users, markets, news, trades, signups, inviteCodes, accessRequests } from "@shared/schema";
+import type { User, InsertUser, Market, InsertMarket, News, InsertNews, Trade, InsertTrade, Signup, InsertSignup, InviteCode, AccessRequest } from "@shared/schema";
 
 const sqlite = new Database("bankruptcybet.db");
 const db = drizzle(sqlite);
@@ -14,9 +14,21 @@ sqlite.exec(`
     name TEXT NOT NULL,
     email TEXT NOT NULL UNIQUE,
     password TEXT NOT NULL,
+    firm TEXT NOT NULL DEFAULT '',
     role TEXT NOT NULL DEFAULT 'trader',
+    approved INTEGER NOT NULL DEFAULT 0,
     bb_balance REAL NOT NULL DEFAULT 50000,
     created_at TEXT NOT NULL
+  );
+  CREATE TABLE IF NOT EXISTS access_requests (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    email TEXT NOT NULL UNIQUE,
+    firm TEXT NOT NULL DEFAULT '',
+    role TEXT NOT NULL DEFAULT '',
+    status TEXT NOT NULL DEFAULT 'pending',
+    created_at TEXT NOT NULL,
+    reviewed_at TEXT
   );
   CREATE TABLE IF NOT EXISTS markets (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -74,6 +86,14 @@ sqlite.exec(`
     role TEXT NOT NULL DEFAULT '',
     created_at TEXT NOT NULL
   );
+  CREATE TABLE IF NOT EXISTS invite_codes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    code TEXT NOT NULL UNIQUE,
+    label TEXT NOT NULL DEFAULT '',
+    used_by_email TEXT,
+    created_at TEXT NOT NULL,
+    used_at TEXT
+  );
 `);
 
 export interface IStorage {
@@ -95,6 +115,18 @@ export interface IStorage {
   // Signups
   createSignup(data: InsertSignup & { createdAt: string }): Signup | null;
   getAllSignups(): Signup[];
+  // Invite codes
+  getInviteCode(code: string): InviteCode | undefined;
+  consumeInviteCode(code: string, email: string): void;
+  createInviteCode(code: string, label: string): InviteCode;
+  getAllInviteCodes(): InviteCode[];
+  // Access requests
+  createAccessRequest(data: { name: string; email: string; firm: string; role: string }): AccessRequest | null;
+  getAccessRequestByEmail(email: string): AccessRequest | undefined;
+  getAllAccessRequests(): AccessRequest[];
+  approveAccessRequest(id: number): void;
+  denyAccessRequest(id: number): void;
+  approveUser(email: string): void;
 }
 
 export const storage: IStorage = {
@@ -145,12 +177,88 @@ export const storage: IStorage = {
   getAllSignups() {
     return db.select().from(signups).all();
   },
+  getInviteCode(code) {
+    return db.select().from(inviteCodes).where(eq(inviteCodes.code, code.trim().toUpperCase())).get();
+  },
+  consumeInviteCode(code, email) {
+    db.update(inviteCodes)
+      .set({ usedByEmail: email, usedAt: new Date().toISOString() })
+      .where(eq(inviteCodes.code, code.trim().toUpperCase()))
+      .run();
+  },
+  createInviteCode(code, label) {
+    return db.insert(inviteCodes).values({
+      code: code.trim().toUpperCase(),
+      label,
+      createdAt: new Date().toISOString(),
+    }).returning().get();
+  },
+  getAllInviteCodes() {
+    return db.select().from(inviteCodes).all();
+  },
+  createAccessRequest(data) {
+    try {
+      return db.insert(accessRequests).values({
+        ...data,
+        createdAt: new Date().toISOString(),
+      }).returning().get();
+    } catch {
+      return null; // duplicate email
+    }
+  },
+  getAccessRequestByEmail(email) {
+    return db.select().from(accessRequests).where(eq(accessRequests.email, email.toLowerCase())).get();
+  },
+  getAllAccessRequests() {
+    return db.select().from(accessRequests).all();
+  },
+  approveAccessRequest(id) {
+    db.update(accessRequests)
+      .set({ status: "approved", reviewedAt: new Date().toISOString() })
+      .where(eq(accessRequests.id, id)).run();
+  },
+  denyAccessRequest(id) {
+    db.update(accessRequests)
+      .set({ status: "denied", reviewedAt: new Date().toISOString() })
+      .where(eq(accessRequests.id, id)).run();
+  },
+  approveUser(email) {
+    db.update(users).set({ approved: true }).where(eq(users.email, email.toLowerCase())).run();
+  },
 };
 
 // ── SEED DATA ────────────────────────────────────────────────────────────────
 function seedIfEmpty() {
   const existing = db.select().from(markets).all();
   if (existing.length > 0) return;
+
+  // ── DEMO USER ─────────────────────────────────────────────────────────────
+  // Email: demo@bankruptcybets.com  |  Password: BBdemo2026!
+  // Pre-hashed with bcrypt cost 12 — change password after first login
+  const demoEmail = "demo@bankruptcybets.com";
+  const existingDemo = db.select().from(users).where(eq(users.email, demoEmail)).get();
+  if (!existingDemo) {
+    db.insert(users).values({
+      name: "Demo User",
+      email: demoEmail,
+      password: "$2b$12$OCgai1T8qFtZag07PLJLuOmR15AJ5v81bIIwb25r7W4lbwkAqOngC",
+      firm: "BankruptcyBet",
+      role: "trader",
+      approved: true,
+      bbBalance: 50000,
+      createdAt: new Date().toISOString(),
+    }).run();
+    // Also create an approved access request so the demo account is consistent
+    db.insert(accessRequests).values({
+      name: "Demo User",
+      email: demoEmail,
+      firm: "BankruptcyBet",
+      role: "Demo",
+      status: "approved",
+      createdAt: new Date().toISOString(),
+      reviewedAt: new Date().toISOString(),
+    }).run();
+  }
 
   const marketData = [
     {

@@ -3,6 +3,8 @@ import express, { Response, NextFunction } from 'express';
 import type { Request } from 'express';
 import session from "express-session";
 import MemoryStore from "memorystore";
+import helmet from "helmet";
+import rateLimit from "express-rate-limit";
 import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
 import { createServer } from "node:http";
@@ -18,15 +20,74 @@ declare module "http" {
   }
 }
 
+// ── SECURITY HEADERS ──────────────────────────────────────────────────────────
+app.disable("x-powered-by");
+app.use(
+  helmet({
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'"],
+        styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+        fontSrc: ["'self'", "https://fonts.gstatic.com", "data:"],
+        imgSrc: ["'self'", "data:", "https:"],
+        connectSrc: ["'self'", "https:"],
+        frameSrc: ["'none'"],
+        objectSrc: ["'none'"],
+        upgradeInsecureRequests: [],
+      },
+    },
+    crossOriginEmbedderPolicy: false, // needed for the iframe-proxy deployment
+    hsts: { maxAge: 31536000, includeSubDomains: true },
+    noSniff: true,
+    xssFilter: true,
+    referrerPolicy: { policy: "strict-origin-when-cross-origin" },
+  })
+);
+
+// ── RATE LIMITING ─────────────────────────────────────────────────────────────
+// Strict limit on auth endpoints — 20 attempts per 15 minutes per IP
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Too many attempts. Please wait 15 minutes and try again." },
+});
+
+// Moderate limit on access requests — 10 per hour per IP (prevents form spam)
+const accessRequestLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Too many access requests from this IP. Please try again later." },
+});
+
+// General API limit — 300 requests per 15 minutes
+const apiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 300,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Too many requests. Please slow down." },
+});
+
+app.use("/api/auth", authLimiter);
+app.use("/api/access-request", accessRequestLimiter);
+app.use("/api", apiLimiter);
+
+// ── BODY PARSING — with size limits ──────────────────────────────────────────
 app.use(
   express.json({
+    limit: "50kb",  // reject payloads over 50kb
     verify: (req, _res, buf) => {
       req.rawBody = buf;
     },
   }),
 );
 
-app.use(express.urlencoded({ extended: false }));
+app.use(express.urlencoded({ extended: false, limit: "50kb" }));
 
 // Trust the proxy so Express sees HTTPS correctly
 app.set("trust proxy", 1);
@@ -86,7 +147,10 @@ app.use((req, res, next) => {
 
   app.use((err: any, _req: Request, res: Response, next: NextFunction) => {
     const status = err.status || err.statusCode || 500;
-    const message = err.message || "Internal Server Error";
+    // Never leak stack traces to clients
+    const message = process.env.NODE_ENV === "production"
+      ? (status < 500 ? err.message : "Internal Server Error")
+      : (err.message || "Internal Server Error");
 
     console.error("Internal Server Error:", err);
 
@@ -107,20 +171,15 @@ app.use((req, res, next) => {
     await setupVite(httpServer, app);
   }
 
-  // ALWAYS serve the app on the port specified in the environment variable PORT
-  // Other ports are firewalled. Default to 5000 if not specified.
-  // this serves both the API and the client.
-  // It is the only port that is not firewalled.
-  const port = parseInt(process.env.PORT || "4000", 10);
-const host = "0.0.0.0";
-
-httpServer.listen(
-  {
-    port,
-    host,
-  },
-  () => {
-    log(`serving on ${host}:${port}`);
-  }
-);
+  const port = parseInt(process.env.PORT || "5000", 10);
+  const host = process.env.HOST || "127.0.0.1";
+  httpServer.listen(
+    {
+      port,
+      host,
+    },
+    () => {
+      log(`serving on port ${port}`);
+    },
+  );
 })();

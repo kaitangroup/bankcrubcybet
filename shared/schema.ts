@@ -8,14 +8,29 @@ export const users = sqliteTable("users", {
   name: text("name").notNull(),
   email: text("email").notNull().unique(),
   password: text("password").notNull(),
+  firm: text("firm").notNull().default(""),
   role: text("role").notNull().default("trader"), // 'trader' | 'admin'
+  approved: integer("approved", { mode: "boolean" }).notNull().default(false),
   bbBalance: real("bb_balance").notNull().default(50000),
   createdAt: text("created_at").notNull().default(new Date().toISOString()),
 });
 
-export const insertUserSchema = createInsertSchema(users).omit({ id: true, bbBalance: true, createdAt: true, role: true });
+export const insertUserSchema = createInsertSchema(users).omit({ id: true, bbBalance: true, createdAt: true, role: true, approved: true });
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
+
+// ── ACCESS REQUESTS ─────────────────────────────────────────────────────────
+export const accessRequests = sqliteTable("access_requests", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  name: text("name").notNull(),
+  email: text("email").notNull().unique(),
+  firm: text("firm").notNull().default(""),
+  role: text("role").notNull().default(""),  // e.g. 'Credit Risk Officer', 'Portfolio Manager'
+  status: text("status").notNull().default("pending"), // 'pending' | 'approved' | 'denied'
+  createdAt: text("created_at").notNull(),
+  reviewedAt: text("reviewed_at"),
+});
+export type AccessRequest = typeof accessRequests.$inferSelect;
 
 // ── MARKETS ────────────────────────────────────────────────────────────────
 export const markets = sqliteTable("markets", {
@@ -96,3 +111,14 @@ export const signups = sqliteTable("signups", {
 export const insertSignupSchema = createInsertSchema(signups).omit({ id: true, createdAt: true });
 export type InsertSignup = z.infer<typeof insertSignupSchema>;
 export type Signup = typeof signups.$inferSelect;
+
+// ── INVITE CODES ───────────────────────────────────────────────────────────
+export const inviteCodes = sqliteTable("invite_codes", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  code: text("code").notNull().unique(),
+  label: text("label").notNull().default(""),       // e.g. 'Ares Capital', 'Blue Owl'
+  usedByEmail: text("used_by_email"),               // null = unused
+  createdAt: text("created_at").notNull(),
+  usedAt: text("used_at"),
+});
+export type InviteCode = typeof inviteCodes.$inferSelect;

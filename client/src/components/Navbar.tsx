@@ -93,9 +93,9 @@ export default function Navbar() {
                   Log in
                 </Button>
               </Link>
-              <Link href="/register">
-                <Button size="sm" className="text-sm bg-primary text-primary-foreground hover:bg-primary/90" data-testid="link-register">
-                  Sign up
+              <Link href="/request-access">
+                <Button size="sm" className="text-sm bg-primary text-primary-foreground hover:bg-primary/90" data-testid="link-request-access">
+                  Request Access
                 </Button>
               </Link>
             </>

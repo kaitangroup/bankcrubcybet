@@ -11,6 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import Navbar from "@/components/Navbar";
+import { ArrowRight, Lock } from "lucide-react";
 
 const registerSchema = z.object({
   name: z.string().min(2, "Name must be at least 2 characters"),
@@ -57,9 +58,27 @@ export default function Register() {
       <Navbar />
       <div className="flex items-center justify-center min-h-[calc(100vh-3.5rem)] px-4">
         <div className="w-full max-w-sm">
+          {/* Access Required Banner */}
+          <Link href="/request-access">
+            <div
+              className="flex items-center justify-between mb-5 px-4 py-3 rounded-lg border border-primary/40 bg-primary/8 cursor-pointer hover:bg-primary/12 transition-colors group"
+              data-testid="banner-request-access"
+            >
+              <div className="flex items-center gap-2">
+                <Lock size={14} className="text-primary shrink-0" />
+                <span className="text-sm text-primary font-medium">
+                  Need access? Request it here
+                </span>
+              </div>
+              <ArrowRight size={14} className="text-primary group-hover:translate-x-0.5 transition-transform" />
+            </div>
+          </Link>
+
           <div className="text-center mb-6">
             <h1 className="text-2xl font-bold text-foreground">Create your account</h1>
-            <p className="text-sm text-muted-foreground mt-1">Start with BB$50,000 in demo credits</p>
+            <p className="text-sm text-muted-foreground mt-1">
+              Your email must be pre-approved to register
+            </p>
           </div>
           <Card className="border-border bg-card shadow-sm">
             <CardContent className="pt-6">
@@ -118,7 +137,7 @@ export default function Register() {
                   disabled={mutation.isPending}
                   data-testid="btn-register-submit"
                 >
-                  {mutation.isPending ? "Creating account…" : "Create Account — It's Free"}
+                  {mutation.isPending ? "Creating account…" : "Create Account"}
                 </Button>
               </form>
               <p className="text-center text-sm text-muted-foreground mt-4">
