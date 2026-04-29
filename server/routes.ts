@@ -4,8 +4,8 @@ import { storage } from "./storage";
 import { insertUserSchema, insertSignupSchema } from "@shared/schema";
 import { z } from "zod";
 import crypto from "crypto";
-import https from "https";
 import bcrypt from "bcryptjs";
+import { Resend } from "resend";
 
 // ── PASSWORD HASHING (bcrypt, cost 12) ───────────────────────────────────────
 const BCRYPT_ROUNDS = 12;
@@ -23,31 +23,80 @@ async function verifyPassword(pw: string, hash: string): Promise<boolean> {
   return bcrypt.compare(pw, hash);
 }
 
-// ── EMAIL NOTIFICATION ────────────────────────────────────────────────────────
-function sendEmailNotification(name: string, firm: string, email: string, role: string) {
-  const SENDGRID_KEY = process.env.SENDGRID_API_KEY;
-  if (!SENDGRID_KEY) return; // skip if not configured
+// ── EMAIL (Resend) ────────────────────────────────────────────────────────────
+// RESEND_API_KEY  — your Resend API key (get it at resend.com)
+// RESEND_FROM     — verified sender, e.g. noreply@bankruptcybets.com
+//                   defaults to onboarding@resend.dev for testing (Resend's sandbox)
+const NOTIFY_TO = "rgj@rolandjones.com";
 
-  // Sanitize all user-supplied values before embedding in email body
+function getResend() {
+  const key = process.env.RESEND_API_KEY;
+  if (!key) {
+    console.warn("[email] RESEND_API_KEY not set — emails will be skipped");
+    return null;
+  }
+  return new Resend(key);
+}
+
+function fromAddress() {
+  // Use your verified domain sender in production.
+  // During testing you can use onboarding@resend.dev (Resend's sandbox sender)
+  return process.env.RESEND_FROM || "onboarding@resend.dev";
+}
+
+// Email 1: notify Roland of a new access request
+async function notifyAdminOfRequest(name: string, firm: string, email: string, role: string) {
+  const resend = getResend();
+  if (!resend) return;
   const safe = (s: string) => s.replace(/[<>&"]/g, "").slice(0, 200);
+  const { error } = await resend.emails.send({
+    from: `BankruptcyBet <${fromAddress()}>`,
+    to: [NOTIFY_TO],
+    reply_to: safe(email),
+    subject: `New Access Request: ${safe(name)} — ${safe(firm) || "(no firm)"}`,
+    text:
+`New access request received on BankruptcyBet.
 
-  const body = JSON.stringify({
-    personalizations: [{ to: [{ email: "rgj@rolandjones.com" }] }],
-    from: { email: "noreply@bankruptcybets.com", name: "BankruptcyBet" },
-    reply_to: { email: safe(email), name: safe(name) },
-    subject: `New Access Request: ${safe(name)} — ${safe(firm)}`,
-    content: [{ type: "text/plain", value:
-      `New access request on BankruptcyBet:\n\nName: ${safe(name)}\nFirm: ${safe(firm)}\nEmail: ${safe(email)}\nRole: ${safe(role)}\n\nReview at: https://bankruptcybets.com/#/admin\n\nTo approve, visit the admin panel and click Approve next to this request.` }],
+Name:  ${safe(name)}
+Firm:  ${safe(firm) || "—"}
+Email: ${safe(email)}
+Role:  ${safe(role) || "—"}
+
+Review and approve at:
+https://bankruptcybets.com/admin
+
+—
+BankruptcyBet Platform`,
   });
-  const req = https.request({
-    hostname: "api.sendgrid.com",
-    path: "/v3/mail/send",
-    method: "POST",
-    headers: { "Authorization": `Bearer ${SENDGRID_KEY}`, "Content-Type": "application/json", "Content-Length": Buffer.byteLength(body) },
+  if (error) console.error("[email] Admin notify failed:", error);
+  else console.log("[email] Admin notified OK");
+}
+
+// Email 2: confirmation to the person who requested access
+async function confirmRequestToUser(name: string, email: string) {
+  const resend = getResend();
+  if (!resend) return;
+  const safe = (s: string) => s.replace(/[<>&"]/g, "").slice(0, 200);
+  const { error } = await resend.emails.send({
+    from: `BankruptcyBet <${fromAddress()}>`,
+    to: [safe(email)],
+    subject: "Your BankruptcyBet access request was received",
+    text:
+`Hi ${safe(name)},
+
+Thank you for requesting access to BankruptcyBet.
+
+Your request is under review. You will receive another email once it has been approved.
+
+If you have any questions, reply to this email.
+
+—
+Roland Gary Jones, Esq.
+BankruptcyBet LLC
+rolandjones.com`,
   });
-  req.on("error", () => {}); // silent — email is best-effort
-  req.write(body);
-  req.end();
+  if (error) console.error("[email] User confirmation failed:", error);
+  else console.log("[email] User confirmation sent OK");
 }
 
 // ── TOKEN STORE — with expiry ─────────────────────────────────────────────────
@@ -279,7 +328,9 @@ export function registerRoutes(httpServer: Server, app: Express) {
       }
       const request = storage.createAccessRequest({ ...body, email: body.email.toLowerCase() });
       if (!request) return res.status(500).json({ error: "Could not save request" });
-      sendEmailNotification(body.name, body.firm, body.email, body.role);
+      // Fire both emails — errors are logged but don't fail the request
+      notifyAdminOfRequest(body.name, body.firm, body.email, body.role);
+      confirmRequestToUser(body.name, body.email);
       return res.json({ ok: true });
     } catch (e: any) {
       return res.status(400).json({ error: e.message });
