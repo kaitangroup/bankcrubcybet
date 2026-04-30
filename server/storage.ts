@@ -10,12 +10,23 @@ const db = drizzle(sqlite);
 // ── MIGRATIONS — safe ALTER TABLE for schema upgrades ────────────────────────
 // Each entry is idempotent — errors (column already exists) are silently ignored
 const migrations = [
+  // SQLite ALTER TABLE cannot add NOT NULL columns without a default in older versions.
+  // Use nullable + default string to ensure compatibility.
   `ALTER TABLE access_requests ADD COLUMN temp_password TEXT`,
-  `ALTER TABLE users ADD COLUMN firm TEXT NOT NULL DEFAULT ''`,
-  `ALTER TABLE users ADD COLUMN approved INTEGER NOT NULL DEFAULT 0`,
+  `ALTER TABLE users ADD COLUMN firm TEXT DEFAULT ''`,
+  `ALTER TABLE users ADD COLUMN approved INTEGER DEFAULT 0`,
+  `ALTER TABLE users ADD COLUMN role TEXT DEFAULT 'trader'`,
 ];
 for (const sql of migrations) {
-  try { sqlite.exec(sql); } catch { /* column already exists — ignore */ }
+  try {
+    sqlite.exec(sql);
+    console.log(`[migration] OK: ${sql.slice(0, 60)}`);
+  } catch (e: any) {
+    // "duplicate column" is expected on subsequent starts — anything else is real
+    if (!e.message?.includes("duplicate column")) {
+      console.warn(`[migration] skipped (${e.message}): ${sql.slice(0, 60)}`);
+    }
+  }
 }
 
 // ── INIT TABLES ──────────────────────────────────────────────────────────────
