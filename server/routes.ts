@@ -52,7 +52,7 @@ async function notifyAdminOfRequest(name: string, firm: string, email: string, r
   const { error } = await resend.emails.send({
     from: `BankruptcyBet <${fromAddress()}>`,
     to: [NOTIFY_TO],
-    reply_to: safe(email),
+    replyTo: safe(email),
     subject: `New Access Request: ${safe(name)} — ${safe(firm) || "(no firm)"}`,
     text:
 `New access request received on BankruptcyBet.
@@ -172,9 +172,9 @@ const tokenStore = new Map<string, TokenEntry>();
 // Purge expired tokens every hour
 setInterval(() => {
   const now = Date.now();
-  for (const [token, entry] of tokenStore.entries()) {
+  Array.from(tokenStore.entries()).forEach(([token, entry]) => {
     if (entry.expiresAt < now) tokenStore.delete(token);
-  }
+  });
 }, 60 * 60 * 1000);
 
 function issueToken(userId: number): string {
