@@ -7,6 +7,17 @@ import type { User, InsertUser, Market, InsertMarket, News, InsertNews, Trade, I
 const sqlite = new Database("bankruptcybet.db");
 const db = drizzle(sqlite);
 
+// ── MIGRATIONS — safe ALTER TABLE for schema upgrades ────────────────────────
+// Each entry is idempotent — errors (column already exists) are silently ignored
+const migrations = [
+  `ALTER TABLE access_requests ADD COLUMN temp_password TEXT`,
+  `ALTER TABLE users ADD COLUMN firm TEXT NOT NULL DEFAULT ''`,
+  `ALTER TABLE users ADD COLUMN approved INTEGER NOT NULL DEFAULT 0`,
+];
+for (const sql of migrations) {
+  try { sqlite.exec(sql); } catch { /* column already exists — ignore */ }
+}
+
 // ── INIT TABLES ──────────────────────────────────────────────────────────────
 sqlite.exec(`
   CREATE TABLE IF NOT EXISTS users (
@@ -27,9 +38,11 @@ sqlite.exec(`
     firm TEXT NOT NULL DEFAULT '',
     role TEXT NOT NULL DEFAULT '',
     status TEXT NOT NULL DEFAULT 'pending',
+    temp_password TEXT,
     created_at TEXT NOT NULL,
     reviewed_at TEXT
   );
+
   CREATE TABLE IF NOT EXISTS markets (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     case_id TEXT NOT NULL UNIQUE,
@@ -102,6 +115,7 @@ export interface IStorage {
   getUserByEmail(email: string): User | undefined;
   createUser(data: InsertUser): User;
   updateBalance(userId: number, newBalance: number): void;
+  updatePassword(userId: number, hashedPassword: string): void;
   // Markets
   getAllMarkets(): Market[];
   getMarketByCaseId(caseId: string): Market | undefined;
@@ -124,7 +138,7 @@ export interface IStorage {
   createAccessRequest(data: { name: string; email: string; firm: string; role: string }): AccessRequest | null;
   getAccessRequestByEmail(email: string): AccessRequest | undefined;
   getAllAccessRequests(): AccessRequest[];
-  approveAccessRequest(id: number): void;
+  approveAccessRequest(id: number, tempPassword?: string): void;
   denyAccessRequest(id: number): void;
   approveUser(email: string): void;
 }
@@ -142,6 +156,9 @@ export const storage: IStorage = {
       email: data.email.toLowerCase(),
       createdAt: new Date().toISOString(),
     }).returning().get();
+  },
+  updatePassword(userId, hashedPassword) {
+    db.update(users).set({ password: hashedPassword }).where(eq(users.id, userId)).run();
   },
   updateBalance(userId, newBalance) {
     db.update(users).set({ bbBalance: newBalance }).where(eq(users.id, userId)).run();
@@ -212,9 +229,9 @@ export const storage: IStorage = {
   getAllAccessRequests() {
     return db.select().from(accessRequests).all();
   },
-  approveAccessRequest(id) {
+  approveAccessRequest(id, tempPassword?: string) {
     db.update(accessRequests)
-      .set({ status: "approved", reviewedAt: new Date().toISOString() })
+      .set({ status: "approved", reviewedAt: new Date().toISOString(), tempPassword: tempPassword || null })
       .where(eq(accessRequests.id, id)).run();
   },
   denyAccessRequest(id) {
@@ -233,9 +250,9 @@ function seedIfEmpty() {
   if (existing.length > 0) return;
 
   // ── DEMO USER ─────────────────────────────────────────────────────────────
-  // Email: demo@bankruptcybets.com  |  Password: BBdemo2026!
+  // Email: demo@bankruptcybet.com  |  Password: BBdemo2026!
   // Pre-hashed with bcrypt cost 12 — change password after first login
-  const demoEmail = "demo@bankruptcybets.com";
+  const demoEmail = "demo@bankruptcybet.com";
   const existingDemo = db.select().from(users).where(eq(users.email, demoEmail)).get();
   if (!existingDemo) {
     db.insert(users).values({

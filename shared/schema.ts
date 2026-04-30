@@ -27,6 +27,7 @@ export const accessRequests = sqliteTable("access_requests", {
   firm: text("firm").notNull().default(""),
   role: text("role").notNull().default(""),  // e.g. 'Credit Risk Officer', 'Portfolio Manager'
   status: text("status").notNull().default("pending"), // 'pending' | 'approved' | 'denied'
+  tempPassword: text("temp_password"),                  // set on approval, cleared after first login
   createdAt: text("created_at").notNull(),
   reviewedAt: text("reviewed_at"),
 });

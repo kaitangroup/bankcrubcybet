@@ -12,6 +12,7 @@ import RequestAccess from "@/pages/RequestAccess";
 import Admin from "@/pages/Admin";
 import Dashboard from "@/pages/Dashboard";
 import Portfolio from "@/pages/Portfolio";
+import Profile from "@/pages/Profile";
 import NotFound from "@/pages/not-found";
 
 function AppRouter() {
@@ -24,6 +25,7 @@ function AppRouter() {
         <Route path="/admin" component={Admin} />
         <Route path="/dashboard" component={Dashboard} />
         <Route path="/portfolio" component={Portfolio} />
+        <Route path="/profile" component={Profile} />
         <Route component={NotFound} />
     </Switch>
   );

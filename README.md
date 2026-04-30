@@ -9,7 +9,7 @@ Stack: **Express + Vite + React + TypeScript + Tailwind CSS + Drizzle ORM + SQLi
 
 | Field    | Value                        |
 |----------|------------------------------|
-| Email    | `demo@bankruptcybets.com`    |
+| Email    | `demo@bankruptcybet.com`    |
 | Password | `BBdemo2026!`                |
 
 > Change this password immediately after first login on a production server.
@@ -78,7 +78,7 @@ pm2 startup   # auto-start on reboot
 ```nginx
 server {
     listen 80;
-    server_name bankruptcybets.com www.bankruptcybets.com;
+    server_name bankruptcybet.com www.bankruptcybet.com;
 
     # Proxy all /api/* requests to Express backend
     location /api/ {
@@ -107,7 +107,7 @@ server {
 ```nginx
 server {
     listen 80;
-    server_name bankruptcybets.com www.bankruptcybets.com;
+    server_name bankruptcybet.com www.bankruptcybet.com;
 
     location / {
         proxy_pass http://127.0.0.1:5000;
@@ -124,7 +124,7 @@ Then enable HTTPS with Certbot:
 
 ```bash
 sudo apt install certbot python3-certbot-nginx
-sudo certbot --nginx -d bankruptcybets.com -d www.bankruptcybets.com
+sudo certbot --nginx -d bankruptcybet.com -d www.bankruptcybet.com
 ```
 
 ### 6. Database

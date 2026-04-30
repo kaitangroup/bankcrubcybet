@@ -42,7 +42,7 @@ export default function Landing() {
           <span className="text-primary">BB</span>et
         </h1>
         <p className="text-sm text-secondary-foreground/40 mb-10">
-          bankruptcybets.com
+          bankruptcybet.com
         </p>
 
         {/* Lock icon */}

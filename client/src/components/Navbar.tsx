@@ -4,7 +4,7 @@ import { apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import { useTheme } from "@/components/ThemeProvider";
-import { Sun, Moon, LogOut, LayoutDashboard, Briefcase } from "lucide-react";
+import { Sun, Moon, LogOut, LayoutDashboard, Briefcase, UserCircle } from "lucide-react";
 
 export default function Navbar() {
   const [location, navigate] = useLocation();
@@ -75,6 +75,18 @@ export default function Navbar() {
                   {user.bbBalance.toLocaleString()}
                 </span>
               </div>
+              <Link href="/profile">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className={`text-sm gap-1.5 ${location === "/profile" ? "text-primary bg-primary/8" : "text-muted-foreground hover:text-foreground"}`}
+                  data-testid="link-profile"
+                  title="Account & Password"
+                >
+                  <UserCircle size={14} />
+                  <span className="hidden sm:block">{user.name.split(" ")[0]}</span>
+                </Button>
+              </Link>
               <Button
                 variant="ghost"
                 size="sm"

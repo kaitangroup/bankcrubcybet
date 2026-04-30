@@ -25,7 +25,7 @@ async function verifyPassword(pw: string, hash: string): Promise<boolean> {
 
 // ── EMAIL (Resend) ────────────────────────────────────────────────────────────
 // RESEND_API_KEY  — your Resend API key (get it at resend.com)
-// RESEND_FROM     — verified sender, e.g. noreply@bankruptcybets.com
+// RESEND_FROM     — verified sender, e.g. noreply@bankruptcybet.com
 //                   defaults to onboarding@resend.dev for testing (Resend's sandbox)
 const NOTIFY_TO = "rgj@rolandjones.com";
 
@@ -63,13 +63,72 @@ Email: ${safe(email)}
 Role:  ${safe(role) || "—"}
 
 Review and approve at:
-https://bankruptcybets.com/admin
+https://bankruptcybet.com/admin
 
 —
 BankruptcyBet Platform`,
   });
   if (error) console.error("[email] Admin notify failed:", error);
   else console.log("[email] Admin notified OK");
+}
+
+// Email 3: approval with temp password
+async function notifyUserApproved(name: string, email: string, tempPassword: string) {
+  const resend = getResend();
+  if (!resend) return;
+  const safe = (s: string) => s.replace(/[<>&"]/g, "").slice(0, 200);
+  const { error } = await resend.emails.send({
+    from: `BankruptcyBet <${fromAddress()}>`,
+    to: [safe(email)],
+    subject: "Your BankruptcyBet access has been approved",
+    text:
+`Hi ${safe(name)},
+
+Your request for access to BankruptcyBet has been approved.
+
+You can now log in using the temporary password below:
+
+  Email:    ${safe(email)}
+  Password: ${tempPassword}
+
+Log in at: https://bankruptcybet.com/login
+
+You will be prompted to change your password after logging in. Please do so immediately.
+
+—
+Roland Gary Jones, Esq.
+BankruptcyBet LLC
+rolandjones.com`,
+  });
+  if (error) console.error("[email] Approval email failed:", error);
+  else console.log("[email] Approval email sent OK");
+}
+
+// Email 4: denial notification
+async function notifyUserDenied(name: string, email: string) {
+  const resend = getResend();
+  if (!resend) return;
+  const safe = (s: string) => s.replace(/[<>&"]/g, "").slice(0, 200);
+  const { error } = await resend.emails.send({
+    from: `BankruptcyBet <${fromAddress()}>`,
+    to: [safe(email)],
+    subject: "Your BankruptcyBet access request",
+    text:
+`Hi ${safe(name)},
+
+Thank you for your interest in BankruptcyBet.
+
+After review, we are unable to approve your access request at this time.
+
+If you believe this is in error or would like to discuss further, please contact us directly at rgj@rolandjones.com.
+
+—
+Roland Gary Jones, Esq.
+BankruptcyBet LLC
+rolandjones.com`,
+  });
+  if (error) console.error("[email] Denial email failed:", error);
+  else console.log("[email] Denial email sent OK");
 }
 
 // Email 2: confirmation to the person who requested access
@@ -229,6 +288,22 @@ export function registerRoutes(httpServer: Server, app: Express) {
     return res.json({ user: safe, token });
   });
 
+  app.post("/api/auth/change-password", async (req, res) => {
+    const userId = getUserIdFromRequest(req);
+    if (!userId) return res.status(401).json({ error: "Not logged in" });
+    const { currentPassword, newPassword } = req.body;
+    if (!currentPassword || !newPassword) return res.status(400).json({ error: "Both current and new password required" });
+    if (typeof newPassword !== "string" || newPassword.length < 6) return res.status(400).json({ error: "New password must be at least 6 characters" });
+    if (newPassword.length > 128) return res.status(400).json({ error: "Password too long" });
+    const user = storage.getUserById(userId);
+    if (!user) return res.status(401).json({ error: "User not found" });
+    const valid = await verifyPassword(currentPassword, user.password);
+    if (!valid) return res.status(401).json({ error: "Current password is incorrect" });
+    const hashed = await hashPassword(newPassword);
+    storage.updatePassword(userId, hashed);
+    return res.json({ ok: true });
+  });
+
   app.post("/api/auth/logout", (req, res) => {
     const headerToken = req.headers["x-session-token"] as string | undefined;
     if (headerToken) tokenStore.delete(headerToken);
@@ -342,20 +417,42 @@ export function registerRoutes(httpServer: Server, app: Express) {
     return res.json(storage.getAllAccessRequests());
   });
 
-  app.post("/api/admin/requests/:id/approve", requireAdmin, (req, res) => {
+  app.post("/api/admin/requests/:id/approve", requireAdmin, async (req, res) => {
     const id = parseInt(req.params.id);
     if (isNaN(id) || id < 1) return res.status(400).json({ error: "Invalid id" });
-    storage.approveAccessRequest(id);
+    // Generate a readable temp password: e.g. BB-A3F9-K2P7
+    const tempPassword = "BB-" + crypto.randomBytes(2).toString("hex").toUpperCase() + "-" + crypto.randomBytes(2).toString("hex").toUpperCase();
+    const hashedTemp = await hashPassword(tempPassword);
+    storage.approveAccessRequest(id, tempPassword);
     const all = storage.getAllAccessRequests();
     const request = all.find(r => r.id === id);
-    if (request) storage.approveUser(request.email);
+    if (request) {
+      // Create the user account automatically with the temp password
+      const existing = storage.getUserByEmail(request.email);
+      if (!existing) {
+        storage.createUser({
+          name: request.name,
+          email: request.email,
+          password: hashedTemp,
+          firm: request.firm || "",
+          approved: true,
+        } as any);
+      } else {
+        // User may have registered already — just mark approved
+        storage.approveUser(request.email);
+      }
+      notifyUserApproved(request.name, request.email, tempPassword);
+    }
     return res.json({ ok: true });
   });
 
-  app.post("/api/admin/requests/:id/deny", requireAdmin, (req, res) => {
+  app.post("/api/admin/requests/:id/deny", requireAdmin, async (req, res) => {
     const id = parseInt(req.params.id);
     if (isNaN(id) || id < 1) return res.status(400).json({ error: "Invalid id" });
     storage.denyAccessRequest(id);
+    const all = storage.getAllAccessRequests();
+    const request = all.find(r => r.id === id);
+    if (request) notifyUserDenied(request.name, request.email);
     return res.json({ ok: true });
   });
 
