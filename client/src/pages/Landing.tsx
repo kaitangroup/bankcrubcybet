@@ -1,4 +1,5 @@
-import { Link } from "wouter";
+import { useEffect } from "react";
+import { Link, useLocation } from "wouter";
 import { useAuth } from "@/lib/auth";
 import { useTheme } from "@/components/ThemeProvider";
 import { Button } from "@/components/ui/button";
@@ -7,6 +8,15 @@ import { Sun, Moon, Lock } from "lucide-react";
 export default function Landing() {
   const { user } = useAuth();
   const { theme, toggle } = useTheme();
+  const [, navigate] = useLocation();
+
+  // Logged-in users go straight to the dashboard — no gate
+  useEffect(() => {
+    if (user) navigate("/dashboard");
+  }, [user, navigate]);
+
+  // Render nothing while redirect is in flight
+  if (user) return null;
 
   return (
     <div className="min-h-screen bg-secondary flex flex-col">
@@ -55,40 +65,28 @@ export default function Landing() {
           This platform is invite-only.<br />Request access to continue.
         </p>
 
-        {/* CTAs */}
-        {user ? (
-          <Link href="/dashboard">
+        {/* CTAs — only shown to guests */}
+        <div className="flex flex-col items-center gap-3 w-full max-w-xs">
+          <Link href="/request-access" className="w-full">
             <Button
               size="lg"
-              className="bg-primary text-primary-foreground hover:bg-primary/90 font-semibold px-10"
-              data-testid="btn-open-dashboard"
+              className="w-full bg-primary text-primary-foreground hover:bg-primary/90 font-semibold"
+              data-testid="btn-request-access"
             >
-              Open Dashboard
+              Request Access
             </Button>
           </Link>
-        ) : (
-          <div className="flex flex-col items-center gap-3 w-full max-w-xs">
-            <Link href="/request-access" className="w-full">
-              <Button
-                size="lg"
-                className="w-full bg-primary text-primary-foreground hover:bg-primary/90 font-semibold"
-                data-testid="btn-request-access"
-              >
-                Request Access
-              </Button>
-            </Link>
-            <Link href="/login" className="w-full">
-              <Button
-                variant="ghost"
-                size="sm"
-                className="w-full text-secondary-foreground/40 hover:text-secondary-foreground text-sm"
-                data-testid="btn-login"
-              >
-                Already have an account? Log in
-              </Button>
-            </Link>
-          </div>
-        )}
+          <Link href="/login" className="w-full">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="w-full text-secondary-foreground/40 hover:text-secondary-foreground text-sm"
+              data-testid="btn-login"
+            >
+              Already have an account? Log in
+            </Button>
+          </Link>
+        </div>
       </div>
 
       {/* Footer */}

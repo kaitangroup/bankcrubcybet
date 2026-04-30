@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -21,7 +22,12 @@ type LoginForm = z.infer<typeof loginSchema>;
 export default function Login() {
   const [, navigate] = useLocation();
   const { toast } = useToast();
-  const { login } = useAuth();
+  const { login, user } = useAuth();
+
+  // If already logged in, redirect immediately
+  useEffect(() => {
+    if (user) navigate("/dashboard");
+  }, [user, navigate]);
 
   const { register, handleSubmit, formState: { errors } } = useForm<LoginForm>({
     resolver: zodResolver(loginSchema),
@@ -31,12 +37,13 @@ export default function Login() {
   const mutation = useMutation({
     mutationFn: async (data: LoginForm) => {
       const res = await apiRequest("POST", "/api/auth/login", data);
-      return res.json();
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.error || "Login failed");
+      return body;
     },
     onSuccess: (data) => {
       login(data.user, data.token);
-      toast({ title: "Welcome back!", description: `Logged in as ${data.user.name}` });
-      navigate("/dashboard");
+      // navigate is triggered by the useEffect above once user state updates
     },
     onError: (err: any) => {
       toast({ title: "Login failed", description: err.message, variant: "destructive" });
