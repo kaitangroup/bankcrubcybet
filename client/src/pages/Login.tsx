@@ -24,9 +24,9 @@ export default function Login() {
   const { toast } = useToast();
   const { login, user } = useAuth();
 
-  // If already logged in, redirect immediately
+  // If already logged in, redirect to home (which shows the full landing page)
   useEffect(() => {
-    if (user) navigate("/dashboard");
+    if (user) navigate("/");
   }, [user, navigate]);
 
   const { register, handleSubmit, formState: { errors } } = useForm<LoginForm>({
